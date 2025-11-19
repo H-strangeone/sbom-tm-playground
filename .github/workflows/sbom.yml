@@ -21,7 +21,7 @@ jobs:
       # --- RUN SBOM-TM (GHCR Container Action) ---
       - name: Run SBOM-TM
         id: sbomtm
-        uses: h-strangeone/SBOM-TM@v0.4.4
+        uses: h-strangeone/SBOM-TM@v0.4.5
         with:
           mode: auto       # auto = diff on PR, scan on push
           project: demo
@@ -64,5 +64,6 @@ jobs:
       - name: Success
         if: steps.sbomtm.outcome == 'success'
         run: echo "✔ SBOM-TM scan succeeded!"
+
 
 
