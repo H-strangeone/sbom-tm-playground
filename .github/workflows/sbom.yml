@@ -2,19 +2,65 @@ name: SBOM-TM Demo Scan
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened]
   push:
+    branches: [main]
 
 jobs:
   scan:
+    name: SBOM Threat Model Scan
     runs-on: ubuntu-latest
+
     steps:
+      # --- REQUIRED FOR DIFF MODE ---
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # IMPORTANT FIX
+          fetch-depth: 0
 
-      - name: Run SBOM-TM (GHCR Container)
-        uses: h-strangeone/SBOM-TM@v0.4.1
+      # --- RUN SBOM-TM (GHCR Container Action) ---
+      - name: Run SBOM-TM
+        id: sbomtm
+        uses: h-strangeone/SBOM-TM@v0.4.2
         with:
-          mode: auto
+          mode: auto       # auto = diff on PR, scan on push
           project: demo
+          offline: false   # or true if you want offline Trivy
+
+      # --- Ensures markdown exists before uploading/posting ---
+      - name: Check if report exists
+        id: check_report
+        run: |
+          if [ -f "sbom-tm-report.md" ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+          fi
+
+      # --- Upload Markdown Report as Artifact ---
+      - name: Upload Markdown Report
+        if: steps.check_report.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-report
+          path: sbom-tm-report.md
+          if-no-files-found: warn
+
+      # --- Sticky PR Comment with Markdown ---
+      - name: Post SBOM Diff Comment on PR
+        if: github.event_name == 'pull_request' && steps.check_report.outputs.found == 'true'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          recreate: true
+          path: sbom-tm-report.md
+
+      # --- Optional: Fail CI if Action Failed ---
+      - name: Fail if SBOM-TM failed
+        if: steps.sbomtm.outcome == 'failure'
+        run: |
+          echo "❌ SBOM-TM found blocking threats or vulnerabilities."
+          exit 1
+
+      - name: Success
+        if: steps.sbomtm.outcome == 'success'
+        run: echo "✔ SBOM-TM scan succeeded!"
